@@ -6,7 +6,7 @@
 
 Byron Knoll byronknoll@users.sourceforge.net
 
-Version 1.1 released on 02/25/2015
+Version 1.1 released on 2013-04-02
 
 ## Changes
 
@@ -14,7 +14,7 @@ Version 1.1 released on 02/25/2015
 
 ## Copyright and License
 
-Copyright (C) 2015 Byron Knoll
+Copyright (C) 2013 Byron Knoll
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
