@@ -1,4 +1,4 @@
-# [Cryptomni](http://sourceforge.net/projects/cryptomni) - Encrypt files using the one-time pad cipher
+# [Cryptomni](http://sourceforge.net/projects/cryptomni)
 
 [Cryptomni](http://sourceforge.net/projects/cryptomni) is a program which can encrypt and decrypt files using the [one-time pad cipher](https://en.wikipedia.org/wiki/One-time_pad). A key file is created using the cryptographically strong random number generator [SecureRandom](https://docs.oracle.com/javase/7/docs/api/java/security/SecureRandom.html). If a key is truly random, kept secret, and never reused, this encryption algorithm can be proven to be unbreakable.
 
