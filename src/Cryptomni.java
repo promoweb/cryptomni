@@ -25,7 +25,12 @@ package src;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.security.SecureRandom;
 
 /** 
@@ -107,59 +112,31 @@ public class Cryptomni
 		}
 		else if (args.length == 4)
 		{
-			if (args[0].equals("-e1"))
+			if (args[0].equals("-e"))
 			{
 				// Attempt to encrypt the file.
 				if (encryptFile(new File(args[1]), new File (args[2]), 
-						new File (args[3]), false))
+						new File (args[3])))
 		    	{
 		    		System.out.println("File encrypted successfully.");
 		    	}
 		    	else
 		    	{
-		    		System.out.println("File IO exception.\n");
+				System.out.println("File encryption failed.\n");
 		    		displayHelp = true;
 		    	}
 			}
-			else if (args[0].equals("-e2"))
-			{
-				// Attempt to encrypt the file.
-				if (encryptFile(new File(args[1]), new File (args[2]), 
-						new File (args[3]), true))
-		    	{
-		    		System.out.println("File encrypted successfully.");
-		    	}
-		    	else
-		    	{
-		    		System.out.println("File IO exception.\n");
-		    		displayHelp = true;
-		    	}
-			}
-			else if (args[0].equals("-d1"))
+			else if (args[0].equals("-d"))
 			{
 				// Attempt to decrypt the file.
 				if (decryptFile(new File(args[1]), new File (args[2]), 
-						new File (args[3]), false))
+						new File (args[3])))
 		    	{
 		    		System.out.println("File decrypted successfully.");
 		    	}
 		    	else
 		    	{
-		    		System.out.println("File IO exception.\n");
-		    		displayHelp = true;
-		    	}
-			}
-			else if (args[0].equals("-d2"))
-			{
-				// Attempt to decrypt the file.
-				if (decryptFile(new File(args[1]), new File (args[2]), 
-						new File (args[3]), true))
-		    	{
-		    		System.out.println("File decrypted successfully.");
-		    	}
-		    	else
-		    	{
-		    		System.out.println("File IO exception.\n");
+				System.out.println("File decryption failed.\n");
 		    		displayHelp = true;
 		    	}
 			}
@@ -181,22 +158,12 @@ public class Cryptomni
 			System.out.println("-c <filename> <size>");
 			System.out.println("Create a Cryptomni key with the specified " +
 							   "number of bytes.\n");
-			System.out.println("-e1 <source file> <key file> <destination file>");
+			System.out.println("-e <source file> <key file> <destination file>");
 			System.out.println("Encrypt a file using the specified Cryptomni " +
-					           "key (without modifying the key).\n");
-			System.out.println("-e2 <source file> <key file> <destination file>");
-			System.out.println("Encrypt a file using the specified Cryptomni " +
-					           "key (deleting the used portion of the key " +
-					           "file).\n");
-			System.out.println("-d1 <encrypted file> <key file> " +
-							   "<destination file>");
+					           "key.\nThe used portion of the key is deleted.\n");
+			System.out.println("-d <encrypted file> <key file> <destination file>");
 			System.out.println("Decrypt a file using the specified Cryptomni " +
-	           					"key (without modifying the key).\n");	
-			System.out.println("-d2 <encrypted file> <key file> " +
-			   "<destination file>");
-			System.out.println("Decrypt a file using the specified Cryptomni " +
-					           "key (deleting the used portion of the key " +
-					           "file).\n");
+					           "key.\nThe used portion of the key is deleted.\n");
 		}
 	}
 	
@@ -216,31 +183,13 @@ public class Cryptomni
 		byte[] pseudoRandom = new byte [byteSize];
 		random.nextBytes(pseudoRandom);
 		
-        FileOutputStream out = null;
-        try 
+        try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(filename, false)))
         {
-        	// Create a file output stream.
-            out = new FileOutputStream(filename, false);
-            // Iterate through each byte in the file.
-            for (byte currentByte: pseudoRandom)
-            {
-            	// Write a random byte to the file.
-                out.write(currentByte);
-            }
-            // Close the output stream.
-            out.close();
+		// Write random bytes to the file.
+            out.write(pseudoRandom);
         }
-        catch (IOException e1)
+        catch (IOException e)
         {
-            if (out != null) // Check if the output stream was created.
-            {
-            	try
-            	{
-                	// Close the output stream.
-            		out.close();
-            	}
-            	catch (IOException e2) {}
-            }
             // Return false because of the IOException.
             return false;
         }
@@ -248,214 +197,86 @@ public class Cryptomni
 		return true;
 	}
 	
-	/** 
-	 * Attempts to encrypt a file using the specified Cryptomni key.
-	 * 
-	 * @param  sourceFile 		the location of the file to encrypt.
-	 * @param  keyFile			the location of the Cryptomni key file.
-	 * @param  destinationFile	the location to create the new encrypted file.
-	 * @param  shrink			a boolean which determines whether the used 
-	 * 							portion of the key file should be deleted.
-	 * @return 					a boolean that is true if the file was 
-	 * 							successfully encrypted, or false if an 
-	 * 							IOException occurred.
-	 */
-	public static boolean encryptFile (File sourceFile, File keyFile, 
-			File destinationFile, boolean shrink)
-	{
-        FileInputStream in = null;
-        FileInputStream key = null;
-        FileOutputStream out = null;
-        try 
-        {
-    		// Create file IO streams.
-            in = new FileInputStream(sourceFile);
-            key = new FileInputStream(keyFile);
-            out = new FileOutputStream(destinationFile, false);
-            int currentByte, keyByte, newByte;
-
-            // Iterate through the bytes in the original file.
-            while ((currentByte = in.read()) != -1) 
-            {
-            	keyByte = key.read();
-            	// Calculate the value of the encrypted byte.
-            	newByte = (currentByte+keyByte)%256;
-            	// Write the byte to the encrypted file.
-                out.write(newByte);
-            }
-            
-            // Check whether the key file needs to be changed.
-            if (shrink && (sourceFile.length()<keyFile.length()))
-            {
-                // Create a temporary file.
-            	File temp = File.createTempFile("crypt", null);
-                // Delete temp file when program exits.
-                temp.deleteOnExit();
-                // Create a new output stream.
-            	out.close();
-                out = new FileOutputStream(temp, false);
-                // Iterate through the remaining bytes in the key file.
-                while ((currentByte = key.read()) != -1) 
-                {
-                	// Write the byte to the temp file.
-                    out.write(currentByte);
-                }
-                // Close the IO streams.
-                in.close();
-                key.close();
-                out.close();
-                // Create new file IO streams to write the new key file.
-                in = new FileInputStream(temp);
-                out = new FileOutputStream(keyFile, false);
-                // Write the new key file.
-                while ((currentByte = in.read()) != -1) 
-                {
-                	// Write the byte to the key file.
-                    out.write(currentByte);
-                }
-                // Close the remaining IO streams.
-                in.close();
-                out.close();
-            }
-            else
-            {            
-            	// Close the IO streams.
-                in.close();
-                key.close();
-                out.close();
-            }
-        } 
-        catch (IOException e1) 
-        {
-        	try
-        	{
-                if (in != null) // Check if the input stream was created.
-                {
-                	// Close the input stream.
-                    in.close();
-                }
-                if (key != null) // Check if the input stream was created.
-                {
-                	// Close the input stream.
-                    key.close();
-                }
-                if (out != null) // Check if the output stream was created.
-                {
-                	// Close the output stream.
-                    out.close();
-                }
-        	}
-        	catch (IOException e2) {}
-            // Return false because of the IOException.
-        	return false;
+	private static boolean transformFile(File inputFile, File keyFile, File outputFile) {
+        if (inputFile.length() > keyFile.length()) {
+            System.err.println("Error: Key file is shorter than the input file. Aborting.");
+            return false;
         }
-        // Return true since the operation was successful.
-		return true;
+
+        final int BUFFER_SIZE = 8192;
+        try (BufferedInputStream in = new BufferedInputStream(new FileInputStream(inputFile));
+             BufferedInputStream key = new BufferedInputStream(new FileInputStream(keyFile));
+             BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(outputFile, false))) {
+
+            byte[] inputBuffer = new byte[BUFFER_SIZE];
+            byte[] keyBuffer = new byte[BUFFER_SIZE];
+            int bytesRead;
+
+            while ((bytesRead = in.read(inputBuffer)) != -1) {
+                int keyBytesRead = key.read(keyBuffer, 0, bytesRead);
+                if (keyBytesRead < bytesRead) {
+                    System.err.println("Error: Key stream ended prematurely. This should not happen.");
+                    out.close();
+                    outputFile.delete();
+                    return false;
+                }
+
+                byte[] outputBuffer = new byte[bytesRead];
+                for (int i = 0; i < bytesRead; i++) {
+                    outputBuffer[i] = (byte) (inputBuffer[i] ^ keyBuffer[i]);
+                }
+                out.write(outputBuffer, 0, bytesRead);
+            }
+        } catch (IOException e) {
+            outputFile.delete();
+            return false;
+        }
+
+        // Shrink or delete the key
+        try {
+            long inputLength = inputFile.length();
+            long keyLength = keyFile.length();
+
+            if (inputLength < keyLength) {
+                try (RandomAccessFile raf = new RandomAccessFile(keyFile, "rw")) {
+                    FileChannel channel = raf.getChannel();
+                    long newSize = keyLength - inputLength;
+
+                    ByteBuffer buffer = ByteBuffer.allocate(8192);
+                    long readPos = inputLength;
+                    long writePos = 0;
+
+                    while (readPos < keyLength) {
+                        buffer.clear();
+                        int bytesRead = channel.read(buffer, readPos);
+                        if (bytesRead <= 0) {
+                            break;
+                        }
+                        buffer.flip();
+                        int bytesWritten = channel.write(buffer, writePos);
+                        readPos += bytesWritten;
+                        writePos += bytesWritten;
+                    }
+                    channel.truncate(newSize);
+                }
+            } else {
+                // If the key is used up exactly, delete it.
+                keyFile.delete();
+            }
+        } catch (IOException e) {
+            // If shrinking fails, the key might be in a corrupted state.
+            return false;
+        }
+        return true;
+    }
+
+	public static boolean encryptFile (File sourceFile, File keyFile,
+			File destinationFile) {
+		return transformFile(sourceFile, keyFile, destinationFile);
 	}
-	
-	/** 
-	 * Attempts to decrypt a file using the specified Cryptomni key.
-	 * 
-	 * @param  encryptedFile	the location of the file to decrypt.
-	 * @param  keyFile			the location of the Cryptomni key file.
-	 * @param  destinationFile	the location to create the new decrypted file.
-	 * @param  shrink			a boolean which determines whether the used 
-	 * 							portion of the key file should be deleted.
-	 * @return 					a boolean that is true if the file was 
-	 * 							successfully decrypted, or false if an 
-	 * 							IOException occurred.
-	 */
-	public static boolean decryptFile (File encryptedFile, File keyFile, 
-			File destinationFile, boolean shrink)
-	{
-        FileInputStream in = null;
-        FileInputStream key = null;
-        FileOutputStream out = null;   
-        try 
-        {
-    		// Create file IO streams.
-            in = new FileInputStream(encryptedFile);
-            key = new FileInputStream(keyFile);
-            out = new FileOutputStream(destinationFile, false);
-            int currentByte, keyByte, newByte;
 
-            // Iterate through the bytes in the encrypted file.
-            while ((currentByte = in.read()) != -1) 
-            {
-            	keyByte = key.read();
-            	// Calculate the value of the decrypted byte.
-            	newByte = currentByte-keyByte;
-            	if (newByte < 0) newByte+=256;
-            	// Write the byte to the decrypted file.
-                out.write(newByte);
-            }
-            
-            // Check whether the key file needs to be changed.
-            if (shrink && (encryptedFile.length()<keyFile.length()))
-            {
-                // Create a temporary file.
-            	File temp = File.createTempFile("crypt", null);
-                // Delete temp file when program exits.
-                temp.deleteOnExit();
-                // Create a new output stream.
-            	out.close();
-                out = new FileOutputStream(temp, false);
-                // Iterate through the remaining bytes in the key file.
-                while ((currentByte = key.read()) != -1) 
-                {
-                	// Write the byte to the temp file.
-                    out.write(currentByte);
-                }
-                // Close the IO streams.
-                in.close();
-                key.close();
-                out.close();
-                // Create new file IO streams to write the new key file.
-                in = new FileInputStream(temp);
-                out = new FileOutputStream(keyFile, false);
-                // Write the new key file.
-                while ((currentByte = in.read()) != -1) 
-                {
-                	// Write the byte to the key file.
-                    out.write(currentByte);
-                }
-                // Close the remaining IO streams.
-                in.close();
-                out.close();
-            }
-            else
-            {            
-            	// Close the IO streams.
-                in.close();
-                key.close();
-                out.close();
-            }
-        } 
-        catch (IOException e1) 
-        {
-        	try
-        	{
-                if (in != null) // Check if the input stream was created.
-                {
-                	// Close the input stream.
-                    in.close();
-                }
-                if (key != null) // Check if the input stream was created.
-                {
-                	// Close the input stream.
-                    key.close();
-                }
-                if (out != null) // Check if the output stream was created.
-                {
-                	// Close the output stream.
-                    out.close();
-                }
-        	}
-        	catch (IOException e2) {}
-            // Return false because of the IOException.
-        	return false;
-        }
-        // Return true since the operation was successful.
-		return true;
+	public static boolean decryptFile (File encryptedFile, File keyFile,
+			File destinationFile) {
+		return transformFile(encryptedFile, keyFile, destinationFile);
 	}
 }

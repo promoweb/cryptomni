@@ -42,6 +42,9 @@ import javax.swing.JSpinner;
 import javax.swing.JTabbedPane;
 import javax.swing.SpinnerModel;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingWorker;
+import java.awt.Cursor;
+
 
 public class TabbedPane extends JPanel 
 {
@@ -116,7 +119,7 @@ public class TabbedPane extends JPanel
         sizeList.setSelectedIndex(1);
         
         // Create the key button.
-        JButton keyButton = new JButton("Create Key File...",saveIcon);
+        final JButton keyButton = new JButton("Create Key File...",saveIcon);
         keyButton.addActionListener(new ActionListener() 
         {
         	public void actionPerformed(ActionEvent e) 
@@ -125,7 +128,7 @@ public class TabbedPane extends JPanel
                 int returnVal = fc.showSaveDialog(TabbedPane.this);
                 if (returnVal == JFileChooser.APPROVE_OPTION) 
                 {
-                    File file = fc.getSelectedFile();
+                    final File file = fc.getSelectedFile();
                     // Get the value of the spinner.
                     int byteSize = (Integer)spinner.getValue();
                     // Check the value of the combo box.
@@ -139,21 +142,40 @@ public class TabbedPane extends JPanel
                     	// Convert mebibytes to bytes.
                     	byteSize *= 1048576;
                     }
-                    // Attempt to create the key file.
-                    if (Cryptomni.createKey(file, byteSize))
-                    {
-                    	// The key file was successfully created.
-                		JOptionPane.showMessageDialog(TabbedPane.this,
-                				"Cryptomni key successfully created.","Success", 
-                				JOptionPane.INFORMATION_MESSAGE);
-                    }
-                    else
-                    {
-                    	// Display an error message.
-                		JOptionPane.showMessageDialog(TabbedPane.this,
-                				"File IO exception.","Error", 
-                				JOptionPane.ERROR_MESSAGE);
-                    }
+                    final int finalByteSize = byteSize;
+
+                    setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+                    keyButton.setEnabled(false);
+
+                    SwingWorker<Boolean, Void> worker = new SwingWorker<Boolean, Void>() {
+                        @Override
+                        protected Boolean doInBackground() throws Exception {
+                            return Cryptomni.createKey(file, finalByteSize);
+                        }
+
+                        @Override
+                        protected void done() {
+                            try {
+                                if (get()) {
+                                    JOptionPane.showMessageDialog(TabbedPane.this,
+                                            "Cryptomni key successfully created.","Success",
+                                            JOptionPane.INFORMATION_MESSAGE);
+                                } else {
+                                    JOptionPane.showMessageDialog(TabbedPane.this,
+                                            "Failed to create key file.","Error",
+                                            JOptionPane.ERROR_MESSAGE);
+                                }
+                            } catch (Exception ex) {
+                                JOptionPane.showMessageDialog(TabbedPane.this,
+                                        "An error occurred: " + ex.getMessage(),"Error",
+                                        JOptionPane.ERROR_MESSAGE);
+                            } finally {
+                                setCursor(Cursor.getDefaultCursor());
+                                keyButton.setEnabled(true);
+                            }
+                        }
+                    };
+                    worker.execute();
                 }
         	}
         });
@@ -220,7 +242,7 @@ public class TabbedPane extends JPanel
         });
         
         // Create the destination button.
-        JButton destinationButton = new JButton("Create Encrypted File...",
+        final JButton destinationButton = new JButton("Create Encrypted File...",
         		saveIcon);
         destinationButton.addActionListener(new ActionListener() 
         {
@@ -240,65 +262,56 @@ public class TabbedPane extends JPanel
         		}
         		else
         		{
-        			int proceed = 0;
         			// Check whether the key file is smaller than the source file.
         			if (encryptFile1.length()>encryptFile2.length())
         			{
-        				// Ask the user if the encryption should proceed.
-        				proceed = JOptionPane.showConfirmDialog(
-        					  TabbedPane.this,
+					// Display an error message and abort.
+					JOptionPane.showMessageDialog(TabbedPane.this,
         					  "The source file is larger than the key file.\n" +
-        					  "Are you sure you want to continue the encryption?",
-        					  "Warning",
-        					  JOptionPane.YES_NO_OPTION);
+							  "Please use a key that is at least as long as the source file.",
+						  "Error",
+						  JOptionPane.ERROR_MESSAGE);
         			}
-        			if (proceed == 0)
+				else
         			{
             			// Display the save dialog.
                         int returnVal = fc.showSaveDialog(TabbedPane.this);
                         if (returnVal == JFileChooser.APPROVE_OPTION) 
                         {
-                            File file3 = fc.getSelectedFile();
-                        	int shrink = 0;
-                			if (encryptFile1.length()<encryptFile2.length())
-                			{
-                				shrink = JOptionPane.showConfirmDialog(
-                  					  TabbedPane.this,
-                  					  "The key file is larger than the source " +
-                  					  "file.\nMultiple files can be encrypted" +
-                  					  " using a single\nkey file if the used " +
-                  					  "portion of the key is\ndeleted after" +
-                  					  " each operation. Would you like\nto " +
-                  					  "shrink the key file after the encryption?",
-                  					  "Confirm",
-                  					  JOptionPane.YES_NO_OPTION);
-                			}
-                            // Attempt to encrypt the file.
-                			boolean result = false;
-                			if (shrink == 0)
-                			{
-                				result = Cryptomni.encryptFile(encryptFile1, 
-                						encryptFile2, file3, true);
-                			}
-                			else
-                			{
-                				result = Cryptomni.encryptFile(encryptFile1, 
-                						encryptFile2, file3, false);
-                			}
-                            if (result)
-                            {
-                            	// The file was successfully encrypted.
-                        		JOptionPane.showMessageDialog(TabbedPane.this,
-                        				"File encrypted successfully.","Success", 
-                        				JOptionPane.INFORMATION_MESSAGE);
-                            }
-                            else
-                            {
-                            	// Display an error message.
-                        		JOptionPane.showMessageDialog(TabbedPane.this,
-                        				"File IO exception.","Error", 
-                        				JOptionPane.ERROR_MESSAGE);
-                            }
+                            final File file3 = fc.getSelectedFile();
+
+                            setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+                            destinationButton.setEnabled(false);
+
+                            SwingWorker<Boolean, Void> worker = new SwingWorker<Boolean, Void>() {
+                                @Override
+                                protected Boolean doInBackground() throws Exception {
+                                    return Cryptomni.encryptFile(encryptFile1, encryptFile2, file3);
+                                }
+
+                                @Override
+                                protected void done() {
+                                    try {
+                                        if (get()) {
+                                            JOptionPane.showMessageDialog(TabbedPane.this,
+                                                    "File encrypted successfully.","Success",
+                                                    JOptionPane.INFORMATION_MESSAGE);
+                                        } else {
+                                            JOptionPane.showMessageDialog(TabbedPane.this,
+                                                    "File encryption failed.","Error",
+                                                    JOptionPane.ERROR_MESSAGE);
+                                        }
+                                    } catch (Exception ex) {
+                                        JOptionPane.showMessageDialog(TabbedPane.this,
+                                                "An error occurred: " + ex.getMessage(),"Error",
+                                                JOptionPane.ERROR_MESSAGE);
+                                    } finally {
+                                        setCursor(Cursor.getDefaultCursor());
+                                        destinationButton.setEnabled(true);
+                                    }
+                                }
+                            };
+                            worker.execute();
                         }
         			}
         		}
@@ -363,7 +376,7 @@ public class TabbedPane extends JPanel
         });
         
         // Create the destination button.
-        JButton destinationButton = new JButton("Create Decrypted File...",
+        final JButton destinationButton = new JButton("Create Decrypted File...",
         		saveIcon);
         destinationButton.addActionListener(new ActionListener() 
         {
@@ -384,66 +397,56 @@ public class TabbedPane extends JPanel
         		}
         		else
         		{
-        			int proceed = 0;
-        			// Check if the key is larger than the source file.
+				// Check if the key is smaller than the source file.
         			if (decryptFile1.length()>decryptFile2.length())
         			{
-        				// Ask the user if the encryption should proceed.
-        				proceed = JOptionPane.showConfirmDialog(
-        					  TabbedPane.this,
+					// Display an error message and abort.
+					JOptionPane.showMessageDialog(TabbedPane.this,
         					  "The encrypted file is larger than the key file.\n"+
-        					  "Are you sure you want to continue the decryption?",
-        					  "Warning",
-        					  JOptionPane.YES_NO_OPTION);
+							  "Please use a key that is at least as long as the encrypted file.",
+						  "Error",
+						  JOptionPane.ERROR_MESSAGE);
         			}
-        			if (proceed == 0)
+				else
         			{
             			// Display the save dialog.
                         int returnVal = fc.showSaveDialog(TabbedPane.this);
                         if (returnVal == JFileChooser.APPROVE_OPTION) 
                         {
-                            File file3 = fc.getSelectedFile();
-                        	int shrink = 0;
-                			if (decryptFile1.length()<decryptFile2.length())
-                			{
-                				shrink = JOptionPane.showConfirmDialog(
-                  					  TabbedPane.this,
-                  					  "The key file is larger than the encrypted"+
-                  					  " file.\nMultiple files can be decrypted" +
-                  					  " using a single\nkey file if the used " +
-                  					  "portion of the key is\ndeleted after" +
-                  					  " each operation. Would you like\nto " +
-                  					  "shrink the key file after the decryption?",
-                  					  "Confirm",
-                  					  JOptionPane.YES_NO_OPTION);
-                			}
+                            final File file3 = fc.getSelectedFile();
                             
-                            // Attempt to decrypt the file.
-                			boolean result = false;
-                			if (shrink == 0)
-                			{
-                				result = Cryptomni.decryptFile(decryptFile1, 
-                						decryptFile2, file3, true);
-                			}
-                			else
-                			{
-                				result = Cryptomni.decryptFile(decryptFile1, 
-                						decryptFile2, file3, false);
-                			}
-                            if (result)
-                            {
-                            	// The file was successfully encrypted.
-                        		JOptionPane.showMessageDialog(TabbedPane.this,
-                        				"File decrypted successfully.","Success", 
-                        				JOptionPane.INFORMATION_MESSAGE);
-                            }
-                            else
-                            {
-                            	// Display an error message.
-                        		JOptionPane.showMessageDialog(TabbedPane.this,
-                        				"File IO exception.","Error", 
-                        				JOptionPane.ERROR_MESSAGE);
-                            }
+                            setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+                            destinationButton.setEnabled(false);
+
+                            SwingWorker<Boolean, Void> worker = new SwingWorker<Boolean, Void>() {
+                                @Override
+                                protected Boolean doInBackground() throws Exception {
+                                    return Cryptomni.decryptFile(decryptFile1, decryptFile2, file3);
+                                }
+
+                                @Override
+                                protected void done() {
+                                    try {
+                                        if (get()) {
+                                            JOptionPane.showMessageDialog(TabbedPane.this,
+                                                    "File decrypted successfully.","Success",
+                                                    JOptionPane.INFORMATION_MESSAGE);
+                                        } else {
+                                            JOptionPane.showMessageDialog(TabbedPane.this,
+                                                    "File decryption failed.","Error",
+                                                    JOptionPane.ERROR_MESSAGE);
+                                        }
+                                    } catch (Exception ex) {
+                                        JOptionPane.showMessageDialog(TabbedPane.this,
+                                                "An error occurred: " + ex.getMessage(),"Error",
+                                                JOptionPane.ERROR_MESSAGE);
+                                    } finally {
+                                        setCursor(Cursor.getDefaultCursor());
+                                        destinationButton.setEnabled(true);
+                                    }
+                                }
+                            };
+                            worker.execute();
                         }
         			}
         		}
